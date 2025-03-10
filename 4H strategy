@@ -1,0 +1,130 @@
+//+------------------------------------------------------------------+
+//| 4H Candle Breakout EA                                            |
+//+------------------------------------------------------------------+
+#property copyright "Your Name"
+#property link      "https://www.example.com"
+#property version   "1.00"
+
+// Input parameters
+input double   LotSize    = 0.1;       // Trade Volume
+input int      TargetPips = 100;       // Target Profit in pips
+input int      StopLossPips = 0;       // Stop Loss in pips (0 = disabled)
+
+// Global variables
+double lastHigh;                       // High of the last 4H candle
+double lastLow;                        // Low of the last 4H candle
+
+//+------------------------------------------------------------------+
+//| Expert initialization function                                     |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   // Initial fetch of last 4H candle data
+   UpdateCandleData();
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                   |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+   // Nothing to clean up in this case
+}
+
+//+------------------------------------------------------------------+
+//| Expert tick function                                               |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+   // Update candle data only if a new 4H candle has formed
+   if (IsNewCandle(PERIOD_H4))
+      UpdateCandleData();
+
+   // Check if there’s an open position
+   if (PositionsTotal() > 0) return; // Exit if a position is already open
+
+   // Current price
+   double currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+
+   // Buy condition: Price crosses above last 4H high
+   double prevPrice = iClose(_Symbol, PERIOD_CURRENT, 1); // Previous tick/close
+   if (prevPrice <= lastHigh && currentPrice > lastHigh)
+   {
+      BuyTrade();
+   }
+   // Sell condition: Price crosses below last 4H low
+   else if (prevPrice >= lastLow && currentPrice < lastLow)
+   {
+      SellTrade();
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Function to update last 4H candle high and low                    |
+//+------------------------------------------------------------------+
+void UpdateCandleData()
+{
+   lastHigh = iHigh(_Symbol, PERIOD_H4, 1);  // High of the last completed 4H candle
+   lastLow  = iLow(_Symbol, PERIOD_H4, 1);   // Low of the last completed 4H candle
+   Print("Updated 4H Candle - High: ", lastHigh, " Low: ", lastLow);
+}
+
+//+------------------------------------------------------------------+
+//| Function to check if a new candle has formed                      |
+//+------------------------------------------------------------------+
+bool IsNewCandle(ENUM_TIMEFRAMES timeframe)
+{
+   static datetime lastBarTime = 0;
+   datetime currentBarTime = iTime(_Symbol, timeframe, 0);
+   
+   if (currentBarTime != lastBarTime)
+   {
+      lastBarTime = currentBarTime;
+      return true;
+   }
+   return false;
+}
+
+//+------------------------------------------------------------------+
+//| Buy Trade Function                                                 |
+//+------------------------------------------------------------------+
+void BuyTrade()
+{
+   CTrade trade; // Trade object
+   double entryPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   double tp = entryPrice + TargetPips * PipValue(); // 100 pips target
+   double sl = (StopLossPips > 0) ? entryPrice - StopLossPips * PipValue() : 0;
+   
+   if (trade.Buy(LotSize, _Symbol, entryPrice, sl, tp))
+      Print("Buy order placed successfully at ", entryPrice, " TP: ", tp, " SL: ", sl);
+   else
+      Print("Buy order failed: ", GetLastError());
+}
+
+//+------------------------------------------------------------------+
+//| Sell Trade Function                                                |
+//+------------------------------------------------------------------+
+void SellTrade()
+{
+   CTrade trade; // Trade object
+   double entryPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   double tp = entryPrice - TargetPips * PipValue(); // 100 pips target
+   double sl = (StopLossPips > 0) ? entryPrice + StopLossPips * PipValue() : 0;
+   
+   if (trade.Sell(LotSize, _Symbol, entryPrice, sl, tp))
+      Print("Sell order placed successfully at ", entryPrice, " TP: ", tp, " SL: ", sl);
+   else
+      Print("Sell order failed: ", GetLastError());
+}
+
+//+------------------------------------------------------------------+
+//| Function to calculate pip value based on symbol                   |
+//+------------------------------------------------------------------+
+double PipValue()
+{
+   double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+   int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+   return (digits == 5 || digits == 3) ? point * 10 : point; // Adjust for 5-digit or 3-digit brokers
+}
+//+------------------------------------------------------------------+
